@@ -6,3 +6,7 @@ ImageClassification.md
 /data
 __pycache__
 /Adam*.png
+/*.pth
+/*.png
+/*.zip
+/pic

@@ -1,3 +1,8 @@
+#my model was trained on the fashion_mnist dataset
+# in the first 10 epochs, I used SGD with a learning rate of 0.0001 and a momentum of 0.9
+# the accuracy was reached 0.90
+# in the next 20 epochs, I used Adam with a learning rate of 0.0001
+# the accuracy was reached 0.93, which is what i can achieve in my laptop with nvidia 4060 8G VRAM
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -52,8 +57,20 @@ def accuracy(model, data_loader):
     correct, total = 0, 0
     for batch in data_loader:
         images, labels = batch
-        pil_images = [Image.fromarray(image.numpy().squeeze(), mode='L') for image in images]
-        images = torch.stack([preprocess(image) for image in pil_images])
+        processed_images = []
+        for image in images:
+            #resize the image to 224*224
+            image_np = image.numpy()
+            image_np = image_np.squeeze()
+            image_np = image_np * 255
+            image = Image.fromarray(image_np)
+            #save the first image
+
+            image = image.convert('L')
+            image = preprocess(image)
+            processed_images.append(image)
+
+        images = torch.stack(processed_images)
         images = images.to(device)
         labels = labels.to(device)
 
@@ -84,40 +101,64 @@ model = torch.hub.load('pytorch/vision:v0.10.0',
                        'resnet18',
                         weights="ResNet18_Weights.DEFAULT")
 
-
+model.conv1 = nn.Conv2d(1, 64, kernel_size=(7, 7), stride=(2, 2), padding=(3, 3), bias=False)
 model.fc = nn.Linear(model.fc.in_features, 10)
-
+import os
+if os.path.exists("fashion_mnist.pth"):
+    model.load_state_dict(torch.load("fashion_mnist.pth"))
 model = model.to(device)
 preprocess = transforms.Compose([
-    transforms.Grayscale(num_output_channels=3),
-    transforms.Resize(256),
-    transforms.CenterCrop(224),
+    transforms.Resize(224),
     transforms.ToTensor(),
-    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+])
+preprocess_train = transforms.Compose([
+    transforms.Resize(224),
+    torchvision.transforms.RandomHorizontalFlip(),
+    torchvision.transforms.RandomRotation(90),
+    transforms.ToTensor(),
 ])
 
+# print("acciracy: "+str(accuracy(model, testloader)))
 
 
 loss_fn = nn.CrossEntropyLoss()
-optimizer = optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
-#optimizer = optim.Adam(model.parameters(), lr=0.0001)
+#optimizer = optim.SGD(model.parameters(), lr=0.0001, momentum=0.9)
+optimizer = optim.Adam(model.parameters(), lr=0.0001)
 if drawfigure == True:
-    table_name = "Adam"
+    table_name = "Adam_Rotation"
     loss_list = []
     accuracy_list = []
 # loop over the dataset multiple times
-num_epoch = 5
+num_epoch = 100
 model.train()
 for epoch in range(num_epoch):
     running_loss = 0.0
     for i, batch in enumerate(trainloader, 0):
+        optimizer.zero_grad()  # zero the parameter gradients
+
         # get the images; batch is a list of [images, labels]
         images, labels = batch
 
+        #save the first image
+        # torchvision.utils.save_image(images[0], "pic/fashion_mnist_before_process.png")
+        processed_images = []
+        for image in images:
+            #resize the image to 224*224
+            image_np = image.numpy()
+            image_np = image_np.squeeze()
+            image_np = image_np * 255
+            image = Image.fromarray(image_np)
+            #save the first image
 
-        optimizer.zero_grad()  # zero the parameter gradients
-        pil_images = [Image.fromarray(image.numpy().squeeze(), mode='L') for image in images]
-        images = torch.stack([preprocess(image) for image in pil_images])
+            image = image.convert('L')
+            # image.save("pic/fashion_mnist_first_process.png")
+            image = preprocess_train(image)
+            # torchvision.utils.save_image(image, "pic/${i}fashion_mnist.png")
+            processed_images.append(image)
+
+        images = torch.stack(processed_images)
+        #save the first image
+        torchvision.utils.save_image(images[0], "pic/${i}fashion_mnist.png")
         # get prediction
         images = images.to(device)
         labels = labels.to(device)
